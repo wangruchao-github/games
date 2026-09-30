@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<!--
+  俄罗斯方块 Tetris
+  @author wangrc
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>俄罗斯方块 Tetris</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141a26;
+    --line: #232c3d;
+    --text: #e6edf3;
+    --muted: #8b98ad;
+    --accent: #60a5fa;
+    --accent-dim: #3b82f6;
+    --gold: #facc15;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1100px 620px at 50% -15%, #182031 0%, var(--bg) 62%);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 14px;
+    user-select: none;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+
+  header {
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  h1 { font-size: 19px; margin: 0; letter-spacing: 3px; font-weight: 800; }
+  h1 span { color: var(--accent); }
+  .spacer { flex: 1; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 3px 11px; min-width: 64px; text-align: center;
+  }
+  .stat i { display: block; font-style: normal; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  .stat b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .stat b.hot { color: var(--gold); }
+
+  .board-row { display: flex; gap: 12px; align-items: flex-start; justify-content: center; }
+  /* 桌面上 HOLD / NEXT 分列两侧；窄屏时收拢成一行浮到棋盘上方 */
+  .sides { display: contents; }
+  .side-col { display: flex; flex-direction: column; }
+  .side-col .lbl { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-align: center; margin-bottom: 5px; }
+  .side-col canvas {
+    display: block; width: 88px; height: auto;
+    background: #10151f; border: 1px solid var(--line); border-radius: 10px;
+  }
+  #holdCv.held { opacity: .3; }
+
+  .stage { position: relative; flex: 0 0 auto; }
+  #cv {
+    display: block; height: min(520px, 68vh); width: auto; aspect-ratio: 10 / 20;
+    background: #0d1219; border: 1px solid var(--line); border-radius: 12px;
+    touch-action: none; box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  .overlay {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 8px;
+    background: rgba(11,14,20,.8); border-radius: 12px; backdrop-filter: blur(3px);
+    text-align: center; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { margin: 0; font-size: 23px; letter-spacing: 3px; }
+  .overlay p { margin: 0; color: var(--muted); font-size: 13px; }
+  .btn {
+    margin-top: 6px; padding: 9px 20px; border-radius: 999px; cursor: pointer;
+    background: var(--accent); color: #04101f; font-weight: 700; font-size: 15px;
+    border: 0; letter-spacing: 1px; font-family: inherit;
+  }
+  .btn:hover { background: #93c5fd; }
+
+  .flash {
+    position: absolute; left: 0; right: 0; top: 33%;
+    text-align: center; pointer-events: none;
+    font-size: 21px; font-weight: 800; letter-spacing: 3px;
+    opacity: 0; text-shadow: 0 2px 14px rgba(0,0,0,.75);
+  }
+  .flash.go { animation: pop .95s ease-out; }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(.6) translateY(8px); }
+    22% { opacity: 1; transform: scale(1.06) translateY(0); }
+    70% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1) translateY(-14px); }
+  }
+
+  .bar {
+    display: flex; align-items: center; gap: 12px; margin-top: 12px;
+    color: var(--muted); font-size: 12px; flex-wrap: wrap;
+  }
+  kbd {
+    background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 6px; font-size: 11px; color: var(--text);
+  }
+  label.sw { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--accent-dim); }
+
+  .pad { display: none; margin-top: 14px; gap: 12px; justify-content: center; align-items: center; }
+  .pad .col { display: flex; flex-direction: column; gap: 6px; }
+  .pad button {
+    min-width: 60px; height: 46px; padding: 0 10px; border-radius: 12px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    font-size: 15px; font-family: inherit; touch-action: none;
+  }
+  .pad button:active, .pad button.on { background: #24304a; border-color: #3a4a68; }
+  @media (pointer: coarse) { .pad { display: flex; } .desktop-tip { display: none; } }
+  @media (max-width: 560px) {
+    .board-row { flex-direction: column; align-items: center; gap: 9px; }
+    .sides { display: flex; gap: 10px; align-items: flex-start; }
+    .sides .side-col { align-items: center; }
+    #cv { height: min(450px, 60vh); }
+    .bar { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>TETRIS</h1>
+    <div class="spacer"></div>
+    <div class="stat"><i>得分</i><b id="score">0</b></div>
+    <div class="stat"><i>最高</i><b id="best">0</b></div>
+    <div class="stat"><i>等级</i><b id="level">1</b></div>
+    <div class="stat"><i>行数</i><b id="lines">0</b></div>
+  </header>
+
+  <div class="board-row">
+    <div class="sides">
+      <div class="side-col">
+        <div class="lbl">HOLD</div>
+        <canvas id="holdCv" width="88" height="46"></canvas>
+      </div>
+      <div class="side-col">
+        <div class="lbl">NEXT</div>
+        <canvas id="nextCv" width="88" height="150"></canvas>
+      </div>
+    </div>
+
+    <div class="stage">
+      <canvas id="cv" width="280" height="560"></canvas>
+      <div class="flash" id="flash"></div>
+      <div class="overlay" id="ov">
+        <h2 id="ovTitle">俄罗斯方块</h2>
+        <p id="ovText">方向键移动 · 空格硬降</p>
+        <button class="btn" id="ovBtn">开始游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad">
+    <button data-act="left">◀</button>
+    <div class="col">
+      <button data-act="cw">↻</button>
+      <button data-act="ccw">↺</button>
+    </div>
+    <button data-act="drop">⤓</button>
+    <div class="col">
+      <button data-act="soft">▼</button>
+      <button data-act="hold">⇄</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span class="desktop-tip">
+      <kbd>←</kbd><kbd>→</kbd> 移动 · <kbd>↓</kbd> 软降 · <kbd>空格</kbd> 硬降 ·
+      <kbd>↑</kbd>/<kbd>W</kbd>/<kbd>X</kbd> 顺时针 · <kbd>Z</kbd>/<kbd>Ctrl</kbd> 逆时针 ·
+      <kbd>A</kbd> 180° · <kbd>C</kbd> 暂存 · <kbd>P</kbd> 暂停 · <kbd>R</kbd> 重开
+    </span>
+    <span class="spacer"></span>
+    <label class="sw"><input type="checkbox" id="ghost" checked /> 落点预览</label>
+    <label class="sw"><input type="checkbox" id="sound" checked /> 音效</label>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // @author wangrc
+  const COLS = 10;         // 可见列
+  const VIS = 20;          // 可见行
+  const BUF = 2;           // 顶部缓冲区（生成 / 旋转的余量）
+  const ROWS = VIS + BUF;
+  const CELL = 28;         // 主画布格宽
+  const MINI = 18;         // 预览格宽
+
+  const SPAWN_X = 3;       // 3x3 方块在 10 列里的起始 x
+  const SPAWN_Y = 1;       // 缓冲区内的起始 y
+  const LOCK_DELAY = 500;  // 落地锁定延迟
+  const LOCK_RESETS = 15;  // 锁定延迟最大重置次数
+  const DAS = 150;         // 水平自动重复延迟
+  const ARR = 33;          // 水平自动重复间隔
+  const SOFT_MS = 28;      // 软降间隔
+  const CLEAR_MS = 320;    // 消行动画时长
+  const HOLD_W = 88, HOLD_H = 46, NEXT_H = 150;
+  const BEST_KEY = 'tetris.best';
+
+  // ---------- 方块定义 ----------
+  const TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+  const COLORS = {
+    I: '#22d3ee', O: '#facc15', T: '#a78bfa',
+    S: '#4ade80', Z: '#f87171', J: '#60a5fa', L: '#fb923c',
+  };
+  // 出生朝向（y 向下），n = 旋转所用的包围盒边长
+  const BASE = {
+    I: { n: 4, cells: [[0, 1], [1, 1], [2, 1], [3, 1]] },
+    O: { n: 2, cells: [[0, 0], [1, 0], [0, 1], [1, 1]] },
+    J: { n: 3, cells: [[0, 0], [0, 1], [1, 1], [2, 1]] },
+    L: { n: 3, cells: [[2, 0], [0, 1], [1, 1], [2, 1]] },
+    S: { n: 3, cells: [[1, 0], [2, 0], [0, 1], [1, 1]] },
+    T: { n: 3, cells: [[1, 0], [0, 1], [1, 1], [2, 1]] },
+    Z: { n: 3, cells: [[0, 0], [1, 0], [1, 1], [2, 1]] },
+  };
+
+  // 绕包围盒中心顺时针旋转（屏幕坐标 y 向下：(dx,dy) -> (-dy,dx)）
+  function rotCW(cells, n) {
+    const c = (n - 1) / 2;
+    return cells.map(([x, y]) => [c - (y - c), c + (x - c)]);
+  }
+
+  const SHAPES = {}; // SHAPES[type][rot] = [[x,y]...]  rot: 0~3（顺时针）
+  for (const t of TYPES) {
+    const n = BASE[t].n;
+    const list = [BASE[t].cells];
+    for (let r = 1; r < 4; r++) list.push(rotCW(list[r - 1], n));
+    SHAPES[t] = list;
+  }
+
+  // ---------- SRS 踢墙表 ----------
+  // 原始数据用官方口径（y 向上），加载时统一翻成屏幕坐标（y 向下）
+  const KICKS_JLSTZ_UP = {
+    '01': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '10': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+    '12': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]],
+    '21': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '23': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+    '32': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '30': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '03': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+  };
+  const KICKS_I_UP = {
+    '01': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]],
+    '10': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
+    '12': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+    '21': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
+    '23': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
+    '32': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]],
+    '30': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
+    '03': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+  };
+  function flipKicks(src) {
+    const out = {};
+    for (const k in src) out[k] = src[k].map(([x, y]) => [x, -y]);
+    return out;
+  }
+  const KICKS = { O: {} };
+  KICKS.I = flipKicks(KICKS_I_UP);
+  for (const t of TYPES) {
+    if (t === 'I' || t === 'O') continue;
+    KICKS[t] = flipKicks(KICKS_JLSTZ_UP);
+  }
+  for (const k of ['01', '10', '12', '21', '23', '32', '30', '03']) KICKS.O[k] = [[0, 0]];
+
+  // ---------- 难度曲线（官方 guideline） ----------
+  function dropMs(lv) {
+    return Math.max(20, Math.pow(0.8 - (lv - 1) * 0.007, lv - 1) * 1000);
+  }
+
+  // ---------- DOM ----------
+  const cv = document.getElementById('cv');
+  const holdCv = document.getElementById('holdCv');
+  const nextCv = document.getElementById('nextCv');
+  const $score = document.getElementById('score');
+  const $best = document.getElementById('best');
+  const $level = document.getElementById('level');
+  const $lines = document.getElementById('lines');
+  const $ov = document.getElementById('ov');
+  const $ovTitle = document.getElementById('ovTitle');
+  const $ovText = document.getElementById('ovText');
+  const $ovBtn = document.getElementById('ovBtn');
+  const $flash = document.getElementById('flash');
+  const $ghost = document.getElementById('ghost');
+  const $sound = document.getElementById('sound');
+
+  const LW = COLS * CELL, LH = VIS * CELL;
+
+  // DPR 适配：画布物理像素 = 逻辑尺寸 × dpr（resize 时重建上下文）
+  function fit(canvas, w, h) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const c = canvas.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return c;
+  }
+  let mainCtx = fit(cv, LW, LH);
+  let holdCtx = fit(holdCv, HOLD_W, HOLD_H);
+  let nextCtx = fit(nextCv, HOLD_W, NEXT_H);
+
+  // ---------- 全局状态 ----------
+  let board, piece, holdType, queue, bag, rng;
+  let score, best, lines, level, combo, b2b;
+  let state, holdUsed, lastKick, lockT, lockResets, gravT;
+  let clearing, trails, lockFlash;
+  let dirHold, dasT, arrT, dasCharged, softing, softT;
+  let last = performance.now();
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // 7-bag：每 7 个方块里 7 种各出现一次
+  function nextType() {
+    if (!bag.length) {
+      const b = TYPES.slice();
+      for (let i = b.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const tmp = b[i]; b[i] = b[j]; b[j] = tmp;
+      }
+      bag = bag.concat(b);
+    }
+    return bag.shift();
+  }
+
+  // ---------- 碰撞 ----------
+  // y < 0 视为合法（允许顶到缓冲区之上），这是 SRS 旋转的必要条件
+  function collide(cells, px, py) {
+    for (let i = 0; i < cells.length; i++) {
+      const x = px + cells[i][0], y = py + cells[i][1];
+      if (x < 0 || x >= COLS || y >= ROWS) return true;
+      if (y >= 0 && board[y][x] !== 0) return true;
+    }
+    return false;
+  }
+  const cellsOf = p => SHAPES[p.type][p.rot];
+  const hits = (p, dx, dy) => collide(cellsOf(p), p.x + dx, p.y + dy);
+
+  // ---------- 音效 ----------
+  let ac = null;
+  function audio() {
+    if (!$sound.checked) return null;
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, dur, type, vol, slideTo) {
+    const a = audio();
+    if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, a.currentTime);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, a.currentTime + dur);
+    g.gain.setValueAtTime(vol == null ? 0.05 : vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  }
+  const sfx = {
+    move: () => tone(190, 0.028, 'square', 0.025),
+    rotate: () => tone(330, 0.045, 'triangle', 0.04),
+    lock: () => tone(120, 0.055, 'sine', 0.05),
+    drop: () => tone(520, 0.06, 'square', 0.04, 180),
+    hold: () => tone(440, 0.07, 'sine', 0.04),
+    clear: () => tone(440, 0.13, 'triangle', 0.05, 660),
+    tetris: () => {
+      tone(523, 0.1, 'triangle', 0.055);
+      setTimeout(() => tone(784, 0.1, 'triangle', 0.055), 70);
+      setTimeout(() => tone(1046, 0.18, 'triangle', 0.05), 140);
+    },
+    levelup: () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.1, 'sine', 0.05), i * 70)); },
+    over: () => { [392, 330, 262, 196].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'sawtooth', 0.05), i * 110)); },
+  };
+
+  // ---------- 回合流程 ----------
+  function makePiece(type) {
+    return { type, rot: 0, x: SPAWN_X, y: SPAWN_Y };
+  }
+  function refillQueue(n) {
+    while (queue.length < n) queue.push(nextType());
+  }
+  function spawn() {
+    piece = makePiece(queue.shift());
+    refillQueue(3);
+    holdUsed = false;
+    lastKick = false;
+    lockT = 0; lockResets = 0; gravT = 0;
+    softing = false; softT = 0;
+    if (hits(piece, 0, 0)) gameOver();
+    drawPreviews();
+  }
+
+  function reset() {
+    board = [];
+    for (let y = 0; y < ROWS; y++) board.push(new Array(COLS).fill(0));
+    bag = []; queue = [];
+    holdType = null; holdUsed = false;
+    score = 0; lines = 0; level = 1; combo = -1; b2b = false;
+    clearing = null; trails = []; lockFlash = null;
+    dirHold = 0; dasT = 0; arrT = 0; dasCharged = false; softing = false; softT = 0;
+    rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) & 0xffffffff);
+    refillQueue(3);
+    $score.textContent = '0'; $level.textContent = '1'; $lines.textContent = '0';
+    $best.classList.remove('hot');
+    spawn();
+  }
+
+  function start() {
+    reset();
+    state = 'running';
+    $ov.classList.remove('show');
+    last = performance.now();
+  }
+
+  function gameOver() {
+    state = 'over';
+    sfx.over();
+    showOverlay('游戏结束',
+      `得分 ${score} · ${lines} 行 · 等级 ${level}${score > 0 && score >= best ? ' · 新纪录 🎉' : ''}`,
+      '再来一局');
+    syncBest();
+  }
+
+  function showOverlay(title, text, btn) {
+    $ovTitle.textContent = title;
+    $ovText.textContent = text;
+    $ovBtn.textContent = btn;
+    $ov.classList.add('show');
+  }
+
+  best = Number(localStorage.getItem(BEST_KEY) || 0) || 0;
+  $best.textContent = best;
+
+  function syncBest() {
+    if (score > best) {
+      best = score;
+      try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* 无痕模式忽略 */ }
+    }
+    $best.textContent = best;
+    $best.classList.toggle('hot', score > 0 && score >= best);
+  }
+
+  // ---------- 操作 ----------
+  function resetLock() {
+    if (lockResets < LOCK_RESETS) { lockT = 0; lockResets++; }
+  }
+  function move(dx, dy) {
+    if (hits(piece, dx, dy)) return false;
+    piece.x += dx; piece.y += dy;
+    resetLock();
+    return true;
+  }
+  // dir: 1 顺时针，-1 逆时针
+  function rotate(dir) {
+    const from = piece.rot;
+    const to = (from + (dir > 0 ? 1 : 3)) % 4;
+    const tests = KICKS[piece.type][from + '' + to];
+    for (let i = 0; i < tests.length; i++) {
+      const nx = piece.x + tests[i][0], ny = piece.y + tests[i][1];
+      if (!collide(SHAPES[piece.type][to], nx, ny)) {
+        piece.x = nx; piece.y = ny; piece.rot = to;
+        lastKick = tests[i][0] !== 0 || tests[i][1] !== 0;
+        resetLock();
+        sfx.rotate();
+        return true;
+      }
+    }
+    return false;
+  }
+  // 180° = 连续两次 90°，每一步都走标准 SRS 校验，天然不会绕过碰撞检测
+  function rotate180() {
+    if (!rotate(1)) return false;
+    if (!rotate(1)) return true; // 第二步转不动就停在中间态
+    lastKick = false;             // 180° 不参与 T-Spin 判定
+    sfx.rotate();
+    return true;
+  }
+  function ghostY() {
+    const cells = cellsOf(piece);
+    let y = piece.y;
+    while (!collide(cells, piece.x, y + 1)) y++;
+    return y;
+  }
+  function hardDrop() {
+    let n = 0;
+    while (move(0, 1)) n++;
+    if (n > 0) { addScore(n * 2); addTrails(n); }
+    lockPiece();
+    sfx.drop();
+  }
+  function holdPiece() {
+    if (holdUsed || state !== 'running' || clearing) return;
+    const cur = piece.type;
+    sfx.hold();
+    if (holdType) {
+      const t = holdType;
+      holdType = cur;
+      piece = makePiece(t);
+    } else {
+      holdType = cur;
+      piece = makePiece(queue.shift());
+      refillQueue(3);
+    }
+    holdUsed = true;
+    lockT = 0; lockResets = 0; gravT = 0; softing = false;
+    if (hits(piece, 0, 0)) gameOver();
+    drawPreviews();
+  }
+
+  // ---------- T-Spin 判定（三角规则） ----------
+  // 角编号：0 左上 1 右上 2 左下 3 右下；每个朝向的「正面」是凸起朝向的两个角
+  const FRONT = { 0: [0, 1], 1: [1, 3], 2: [2, 3], 3: [0, 2] };
+  function filled(x, y) {
+    if (x < 0 || x >= COLS || y >= ROWS) return true; // 墙 / 地板算实心
+    if (y < 0) return true;
+    return board[y][x] !== 0;
+  }
+  function detectSpin() {
+    if (piece.type !== 'T' || !lastKick) return null;
+    const cx = piece.x + 1, cy = piece.y + 1;
+    const c = [
+      filled(cx - 1, cy - 1),
+      filled(cx + 1, cy - 1),
+      filled(cx - 1, cy + 1),
+      filled(cx + 1, cy + 1),
+    ];
+    const n = c.filter(Boolean).length;
+    if (n < 3) return null;
+    const f = FRONT[piece.rot];
+    // 4 个角全实 或 正面两角都实 = 完整 T-Spin；3 角但只占一个正面角 = mini
+    if (n === 4 || (c[f[0]] && c[f[1]])) return 'spin';
+    return 'mini';
+  }
+
+  // ---------- 消行与计分 ----------
+  function fullRows() {
+    const out = [];
+    for (let y = 0; y < ROWS; y++) {
+      let solid = true;
+      for (let x = 0; x < COLS; x++) if (board[y][x] === 0) { solid = false; break; }
+      if (solid) out.push(y);
+    }
+    return out;
+  }
+  function baseScore(n, spin) {
+    if (spin === 'mini') return n === 1 ? 200 : (n === 2 ? 400 : 100);
+    if (spin) return [400, 800, 1200, 1600][n];
+    return [0, 100, 300, 500, 800][n];
+  }
+  function addScore(points) {
+    score += points;
+    $score.textContent = score;
+  }
+
+  function lockPiece() {
+    const cells = cellsOf(piece).map(c => [piece.x + c[0], piece.y + c[1]]);
+    lockFlash = { cells, t: 0, dur: 90 };
+
+    for (let i = 0; i < cells.length; i++) {
+      const x = cells[i][0], y = cells[i][1];
+      if (y >= 0 && y < ROWS && x >= 0 && x < COLS) board[y][x] = TYPES.indexOf(piece.type) + 1;
+    }
+    sfx.lock();
+
+    const rows = fullRows();
+    const spin = detectSpin();
+    if (rows.length) {
+      clearing = { rows, t: 0, dur: CLEAR_MS, spin, n: rows.length };
+    } else {
+      if (spin) { addScore(baseScore(0, spin) * level); combo = -1; }
+      else { combo = -1; b2b = false; }
+      spawn();
+    }
+  }
+
+  function finishClear() {
+    const { rows, spin, n } = clearing;
+    // 从下往上抽掉满行
+    const set = new Set(rows);
+    let w = ROWS - 1;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (set.has(r)) continue;
+      for (let c = 0; c < COLS; c++) board[w][c] = board[r][c];
+      w--;
+    }
+    for (let r = w; r >= 0; r--) for (let c = 0; c < COLS; c++) board[r][c] = 0;
+    clearing = null;
+
+    const difficult = n === 4 || !!spin;
+    const chained = difficult && b2b;      // 结算前是否已处于 B2B
+    let pts = baseScore(n, spin) * level;
+    if (chained) pts = Math.round(pts * 1.5);
+    combo++;
+    if (combo > 0) pts += 50 * combo * level;
+    addScore(pts);
+    b2b = difficult;
+
+    lines += n;
+    const newLevel = Math.min(30, 1 + Math.floor(lines / 10));
+    if (newLevel > level) { level = newLevel; $level.textContent = level; sfx.levelup(); }
+    $lines.textContent = lines;
+
+    if (n === 4) sfx.tetris(); else sfx.clear();
+    showClearFlash(n, spin, chained);
+    spawn();
+  }
+
+  function showClearFlash(n, spin, chained) {
+    let text, color;
+    if (spin) {
+      text = spin === 'mini' ? 'T-SPIN MINI' : ['T-SPIN', 'T-SPIN SINGLE', 'T-SPIN DOUBLE', 'T-SPIN TRIPLE'][n];
+      color = '#a78bfa';
+    } else {
+      text = ['', 'SINGLE', 'DOUBLE', 'TRIPLE', 'TETRIS'][n];
+      color = n === 4 ? '#22d3ee' : '#e6edf3';
+    }
+    if (n > 1) text += '!';
+    if (chained) text = 'B2B ' + text;
+    $flash.textContent = text;
+    $flash.style.color = color;
+    $flash.classList.remove('go');
+    void $flash.offsetWidth; // 强制回流以重启动画
+    $flash.classList.add('go');
+  }
+
+  function addTrails(n) {
+    const cells = cellsOf(piece);
+    for (let i = 0; i < cells.length; i++) {
+      trails.push({
+        x: piece.x + cells[i][0],
+        y1: piece.y + cells[i][1],
+        y2: piece.y + cells[i][1] + n,
+        t: 0, dur: 180,
+      });
+    }
+  }
+
+  // ---------- 更新 ----------
+  function update(dt) {
+    if (state !== 'running') return;
+    if (clearing) {
+      clearing.t += dt;
+      if (clearing.t >= clearing.dur) finishClear();
+      return;
+    }
+    if (lockFlash) { lockFlash.t += dt; if (lockFlash.t >= lockFlash.dur) lockFlash = null; }
+    for (let i = trails.length - 1; i >= 0; i--) {
+      trails[i].t += dt;
+      if (trails[i].t >= trails[i].dur) trails.splice(i, 1);
+    }
+
+    // 水平 DAS / ARR
+    if (dirHold !== 0) {
+      if (!dasCharged) {
+        dasT += dt;
+        if (dasT >= DAS) { dasCharged = true; arrT = 0; }
+      } else {
+        arrT += dt;
+        let guard = 0;
+        while (arrT >= ARR && guard++ < 20) {
+          arrT -= ARR;
+          if (!move(dirHold, 0)) break;
+        }
+      }
+    }
+
+    // 软降 / 重力
+    if (softing) {
+      softT += dt;
+      let guard = 0;
+      while (softT >= SOFT_MS && guard++ < 20) {
+        softT -= SOFT_MS;
+        if (move(0, 1)) addScore(1);
+        else { softing = false; break; }
+      }
+    } else {
+      gravT += dt;
+      const iv = dropMs(level);
+      let guard = 0;
+      while (gravT >= iv && guard++ < 20) {
+        gravT -= iv;
+        if (move(0, 1)) gravT = 0;
+        else break;
+      }
+      if (gravT > iv) gravT = 0;
+    }
+
+    if (hits(piece, 0, 1)) {
+      lockT += dt;
+      if (lockT >= LOCK_DELAY) lockPiece();
+    } else {
+      lockT = 0;
+    }
+  }
+
+  // ---------- 渲染 ----------
+  function rr(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function shade(hex, k) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, ((n >> 16) & 255) * k) | 0;
+    const g = Math.min(255, ((n >> 8) & 255) * k) | 0;
+    const b = Math.min(255, (n & 255) * k) | 0;
+    return `rgb(${r},${g},${b})`;
+  }
+  function block(c, px, py, size, color, alpha) {
+    const a = alpha == null ? 1 : alpha;
+    const pad = Math.max(1, size * 0.055);
+    const x = px + pad, y = py + pad, s = size - pad * 2;
+    const g = c.createLinearGradient(x, y, x + s, y + s);
+    g.addColorStop(0, shade(color, 1.32));
+    g.addColorStop(0.45, color);
+    g.addColorStop(1, shade(color, 0.62));
+    c.globalAlpha = a;
+    c.fillStyle = g;
+    rr(c, x, y, s, s, size * 0.16);
+    c.fill();
+    c.globalAlpha = a * 0.26;      // 顶部高光
+    c.fillStyle = '#fff';
+    rr(c, x + s * 0.14, y + s * 0.1, s * 0.72, s * 0.18, s * 0.09);
+    c.fill();
+    c.globalAlpha = 1;
+  }
+
+  function drawBoard() {
+    const c = mainCtx;
+    c.clearRect(0, 0, LW, LH);
+    c.fillStyle = '#0d1219';
+    c.fillRect(0, 0, LW, LH);
+
+    // 顶部缓冲区压暗，暗示「看不见但存在」的区域
+    const fade = c.createLinearGradient(0, 0, 0, CELL * BUF);
+    fade.addColorStop(0, 'rgba(0,0,0,.85)');
+    fade.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = fade;
+    c.fillRect(0, 0, LW, CELL * BUF);
+
+    // 网格
+    c.strokeStyle = 'rgba(255,255,255,.045)';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let i = 1; i < COLS; i++) {
+      c.moveTo(Math.round(i * CELL) + 0.5, 0);
+      c.lineTo(Math.round(i * CELL) + 0.5, LH);
+    }
+    for (let j = 1; j < VIS; j++) {
+      c.moveTo(0, Math.round(j * CELL) + 0.5);
+      c.lineTo(LW, Math.round(j * CELL) + 0.5);
+    }
+    c.stroke();
+
+    // 已落定的方块
+    for (let y = BUF; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const v = board[y][x];
+        if (!v) continue;
+        block(c, x * CELL, (y - BUF) * CELL, CELL, COLORS[TYPES[v - 1]]);
+      }
+    }
+
+    // 硬降残影
+    for (const tr of trails) {
+      c.globalAlpha = (1 - tr.t / tr.dur) * 0.5;
+      c.fillStyle = COLORS[piece.type];
+      const top = (tr.y1 - BUF) * CELL;
+      c.fillRect(tr.x * CELL + CELL * 0.3, top, CELL * 0.4, Math.max(2, tr.y2 - tr.y1) * CELL);
+      c.globalAlpha = 1;
+    }
+
+    if (piece && state !== 'over') {
+      const cells = cellsOf(piece);
+
+      // 落点预览
+      if ($ghost.checked && !clearing) {
+        const gy = ghostY();
+        if (gy !== piece.y) {
+          c.globalAlpha = 0.15;
+          c.fillStyle = COLORS[piece.type];
+          for (const [cx, cy] of cells) {
+            const x = piece.x + cx, y = gy + cy;
+            if (y < BUF) continue;
+            c.fillRect(x * CELL + 2, (y - BUF) * CELL + 2, CELL - 4, CELL - 4);
+          }
+          c.globalAlpha = 0.5;
+          c.strokeStyle = COLORS[piece.type];
+          c.lineWidth = 1.5;
+          for (const [cx, cy] of cells) {
+            const x = piece.x + cx, y = gy + cy;
+            if (y < BUF) continue;
+            c.strokeRect(x * CELL + 2.5, (y - BUF) * CELL + 2.5, CELL - 5, CELL - 5);
+          }
+          c.globalAlpha = 1;
+        }
+      }
+
+      // 当前方块（贴地时加微光提示即将锁定）
+      if (!clearing) {
+        const grounded = hits(piece, 0, 1);
+        for (const [cx, cy] of cells) {
+          const x = piece.x + cx, y = piece.y + cy;
+          if (y < BUF) continue;
+          const px = x * CELL, py = (y - BUF) * CELL;
+          if (grounded) {
+            c.save();
+            c.shadowColor = COLORS[piece.type];
+            c.shadowBlur = 12;
+            block(c, px, py, CELL, COLORS[piece.type]);
+            c.restore();
+          } else {
+            block(c, px, py, CELL, COLORS[piece.type]);
+          }
+        }
+      }
+    }
+
+    // 锁定闪光
+    if (lockFlash) {
+      c.globalAlpha = 1 - lockFlash.t / lockFlash.dur;
+      c.fillStyle = '#fff';
+      for (const [x, y] of lockFlash.cells) {
+        if (y < BUF) continue;
+        c.fillRect(x * CELL + 2, (y - BUF) * CELL + 2, CELL - 4, CELL - 4);
+      }
+      c.globalAlpha = 1;
+    }
+
+    // 消行动画：整行闪白 + 从两侧向中间收缩
+    if (clearing) {
+      const k = clearing.t / clearing.dur;
+      for (const r of clearing.rows) {
+        const y = (r - BUF) * CELL;
+        if (y < 0) continue;
+        c.fillStyle = `rgba(255,255,255,${0.85 * (1 - k)})`;
+        c.fillRect(0, y, LW, CELL);
+        c.fillStyle = `rgba(255,255,255,${0.55 * (1 - k)})`;
+        const shrink = k * k * LW * 0.5;
+        c.fillRect(0, y, shrink, CELL);
+        c.fillRect(LW - shrink, y, shrink, CELL);
+      }
+    }
+
+    if (state === 'over') {
+      c.fillStyle = 'rgba(9,12,18,.55)';
+      c.fillRect(0, 0, LW, LH);
+    }
+  }
+
+  function drawMini(c, type, cx, cy, size, alpha) {
+    if (!type) return;
+    const cells = SHAPES[type][0];
+    let minX = 9, maxX = -9, minY = 9, maxY = -9;
+    for (const [x, y] of cells) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    const ox = cx - (maxX - minX + 1) * size / 2 - minX * size;
+    const oy = cy - (maxY - minY + 1) * size / 2 - minY * size;
+    for (const [x, y] of cells) block(c, ox + x * size, oy + y * size, size, COLORS[type], alpha);
+  }
+
+  function drawPreviews() {
+    holdCtx.clearRect(0, 0, HOLD_W, HOLD_H);
+    holdCtx.fillStyle = '#10151f';
+    holdCtx.fillRect(0, 0, HOLD_W, HOLD_H);
+    drawMini(holdCtx, holdType, HOLD_W / 2, HOLD_H / 2, MINI, holdUsed ? 0.3 : 1);
+    holdCv.classList.toggle('held', !!holdUsed);
+
+    nextCtx.clearRect(0, 0, HOLD_W, NEXT_H);
+    nextCtx.fillStyle = '#10151f';
+    nextCtx.fillRect(0, 0, HOLD_W, NEXT_H);
+    for (let i = 0; i < 3; i++) {
+      drawMini(nextCtx, queue[i], HOLD_W / 2, 25 + i * 50, MINI, i === 0 ? 1 : 0.72);
+      if (i < 2) {
+        nextCtx.strokeStyle = 'rgba(255,255,255,.06)';
+        nextCtx.lineWidth = 1;
+        nextCtx.beginPath();
+        nextCtx.moveTo(12, 50 + i * 50);
+        nextCtx.lineTo(HOLD_W - 12, 50 + i * 50);
+        nextCtx.stroke();
+      }
+    }
+  }
+
+  // ---------- 主循环 ----------
+  function loop(now) {
+    let dt = now - last;
+    last = now;
+    if (dt > 200) dt = 200; // 切后台回来不要一次补太多步
+    update(dt);
+    drawBoard();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', () => {
+    mainCtx = fit(cv, LW, LH);
+    holdCtx = fit(holdCv, HOLD_W, HOLD_H);
+    nextCtx = fit(nextCv, HOLD_W, NEXT_H);
+    drawPreviews();
+  });
+
+  // ---------- 输入 ----------
+  function pressDir(d) {
+    if (state === 'ready' || state === 'over') { start(); return; }
+    if (state !== 'running' || clearing) return;
+    if (dirHold === d) return;
+    dirHold = d; dasT = 0; arrT = 0; dasCharged = false;
+    if (move(d, 0)) sfx.move();
+  }
+  function releaseDir(d) {
+    if (dirHold === d) { dirHold = 0; dasCharged = false; }
+  }
+  function tapSoft(on) {
+    if (state !== 'running' || clearing) {
+      if (on && (state === 'ready' || state === 'over')) start();
+      return;
+    }
+    softing = on;
+    if (on) { softT = 0; gravT = 0; } else gravT = 0;
+  }
+
+  const KEYMAP = {
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    ArrowDown: 'soft',
+    ArrowUp: 'cw', KeyW: 'cw', KeyX: 'cw',
+    KeyZ: 'ccw', ControlLeft: 'ccw', ControlRight: 'ccw',
+    KeyA: 'rot180', KeyQ: 'rot180',
+    Space: 'hard',
+    KeyC: 'hold',
+  };
+
+  function act(a) {
+    if (a === 'left' || a === 'right') { pressDir(a === 'left' ? -1 : 1); return; }
+    if (a === 'soft') { tapSoft(true); return; }
+    if (state === 'ready' || state === 'over') { start(); return; }
+    if (state !== 'running' || clearing) return;
+    if (a === 'cw') rotate(1);
+    else if (a === 'ccw') rotate(-1);
+    else if (a === 'rot180') rotate180();
+    else if (a === 'hard') hardDrop();
+    else if (a === 'hold') holdPiece();
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause(); return; }
+    if (e.code === 'KeyR') { e.preventDefault(); start(); return; }
+    const a = KEYMAP[e.code];
+    if (!a) return;
+    e.preventDefault();
+    act(a);
+  });
+  window.addEventListener('keyup', e => {
+    const a = KEYMAP[e.code];
+    if (a === 'left') releaseDir(-1);
+    else if (a === 'right') releaseDir(1);
+    else if (a === 'soft') tapSoft(false);
+  });
+
+  function togglePause() {
+    if (state === 'running') {
+      state = 'paused';
+      softing = false; dirHold = 0; dasCharged = false;
+      showOverlay('已暂停', '按 P 继续', '继续');
+    } else if (state === 'paused') {
+      state = 'running';
+      $ov.classList.remove('show');
+      last = performance.now();
+    }
+  }
+
+  $ovBtn.addEventListener('click', () => {
+    if (state === 'paused') togglePause();
+    else start();
+  });
+
+  // 触屏 / 鼠标按钮：按住方向与软降能连发
+  document.querySelectorAll('.pad button').forEach(btn => {
+    const a = btn.dataset.act;
+    const up = () => {
+      btn.classList.remove('on');
+      if (a === 'left') releaseDir(-1);
+      else if (a === 'right') releaseDir(1);
+      else if (a === 'soft') tapSoft(false);
+    };
+    btn.addEventListener('touchstart', e => { e.preventDefault(); btn.classList.add('on'); audio(); act(a); }, { passive: false });
+    btn.addEventListener('touchend', e => { e.preventDefault(); up(); }, { passive: false });
+    btn.addEventListener('touchcancel', up);
+    btn.addEventListener('mousedown', e => { e.preventDefault(); btn.classList.add('on'); audio(); act(a); });
+    btn.addEventListener('mouseup', up);
+    btn.addEventListener('mouseleave', up);
+  });
+
+  // 画布手势：左右滑移动、下滑软降、上滑硬降、点按旋转
+  let gx = 0, gy = 0, gMoved = false, gTime = 0;
+  cv.addEventListener('touchstart', e => {
+    gx = e.touches[0].clientX; gy = e.touches[0].clientY;
+    gMoved = false; gTime = performance.now();
+  }, { passive: true });
+  cv.addEventListener('touchmove', e => {
+    if (gMoved) return;
+    const dx = e.touches[0].clientX - gx;
+    const dy = e.touches[0].clientY - gy;
+    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+    gMoved = true;
+    if (Math.abs(dx) > Math.abs(dy)) act(dx > 0 ? 'right' : 'left');
+    else if (dy > 0) tapSoft(true);
+    else act('hard');
+  }, { passive: true });
+  cv.addEventListener('touchend', () => {
+    if (softing) tapSoft(false);
+    if (!gMoved) act('cw');
+    gTime = performance.now();
+  }, { passive: true });
+  cv.addEventListener('click', () => {
+    // 触屏点按已由 touchend 处理，避免一次点按转两次
+    if (performance.now() - gTime < 350) return;
+    if (state === 'ready' || state === 'over') start();
+    else if (state === 'running') act('cw');
+  });
+
+  // ---------- 启动 ----------
+  state = 'ready';
+  rng = mulberry32((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) & 0xffffffff);
+  reset();
+  drawBoard();
+  showOverlay('俄罗斯方块', '方向键移动 · 空格硬降 · 凑满一行消除', '开始游戏');
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
